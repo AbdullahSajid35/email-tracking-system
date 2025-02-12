@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "copper-seeker-432801-c1",
+  "private_key_id": "52dc6cc0195d1acd9e5f621557dd120516c41951",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDHt+9Esn59QVIv\nf2SyO71iy1VgzShMi9VieUcp2aERFT6Zkh4JKfliCigc+zGeIpr9TNpaS2AMzqIw\nvnBkdvGuo7hgpSXD0r4SHj2DrZd3JLrLGgAeQioXuwyP4mf5zwOlTBGdVQSNKo4X\n03hgC29E6BsNdfk4SenzFIfK8tI8tS0RKB8Yl2r4miP/LaPbgm3zSkMycJNUP/sq\n6P1X2JQRaeAFOUMUAjqznSskfyyjgKwFazHX/+c/mgaruGJWtY7HCd0ABfpXX9DP\nTBInFyAtYwhGfJfJCglbjNz4YvVnJo7FVN4q86iCV6FVeuT+C3tVEhNnxz3RDDGG\n6sVoiEzfAgMBAAECggEACQgzTMGKa+K3iJ4JG/BiB7pCBwna1TS2YT4yhDIrO75g\ntt7p9yh2oULr/nzeXmmakHMDJaCRXEg/WIH8S5F/gOeMOpQCvwuO/KXGdWff2OEI\nhjqLn9KxMaKMFmO6/Qv/fQsReYfd7VPBL6hTd3snkeUHTYFffyFZ8FwmKfz3mgwp\nDwztQ+kNTzTxnbrTRxukjz+B0nvK/3RkasAIR87ywxZP3+q3a6B1JKrnWzzXnixn\nplO6ED9LFhcgoY+dazhJPXWM31tab9EiNZgxk2k9ST8TO0eXuQwsEiIcX1gVrpsn\nyb0LGrFMnztImL7clcfmnYkhvkIBtkLe1+u7tezN9QKBgQDl3EjEhn6kzHis14JI\nSmuYGWDQD+UnG+oTOm13o+n4yvJSk83PrJoX6X13WttmDVdE0D9qTx2rAOoNm/on\nhr9uhY6iMmVr4U6YouopzyZT6mKHtVibJH/ztrq6BRh3enz3iON6JhxuXs2ioPRm\nRREb1u6TFvLOE3nT+h4w7n3oMwKBgQDebieM03R4eG9rYO0o/FvkTLKyUZvdQ1fr\nCVze/BtqHFL9lKrHBzIr7ze6DU++5drRSNT3zlOwOi1tZE+3E5bmxEVJ9KJ1zQpZ\nsiCmt/KUkNK2D05Pa7MWft9O4+B2+85z/XJ75UAWZ+X4T5mn8JNhV0NdIKs1qMNC\nQl3LDUPMpQKBgHS06vF1hDmyY5cGeOyxdH2ubPxXBbdcsfV/VfNH81TR3kVVLEtE\nTJzVfVGrfPgM0AFtZrVYZCzd8vhj+Jg3D11TTH9H7TzgEaLoHNKLjd9PgyV6SvnC\nh4C7h4VJbwnC1E5uX2k2jnrvgaMP6+c9LBmhgFKIdVFyjAm31bpsbNsHAoGAUiy4\nB9sHKIq1/yGr/HxfJpT/X8mun6wFixvGZ8sUBbu5HV4TSbxq2LhkCiRo1cntcWxK\n4dIkMPMNXWC14pkmItNYFd5/Nq4tqL2aOn2y7RgkAIbfE5BidWkh7u9ZOhwFRezY\notUrPBveZkJiLh0/FbM7e+hZ2FUk7hG+vQmFhtECgYA4uP1X0kxp8i5cXRDjWUjZ\nIrPCqMJiEelC6XLs2IIJzFb/7d022eX2Y8dAi7/d/cmD1P6slqLOKIboCEKQBpJ0\n2alfWrJCV7B3G5l45oAnZJ+ao/LuxjjPgWN6cBg4FOprM/15JsKt15rbwmeoE+hk\nhoKfllZgzB2yhW3edtIxkA==\n-----END PRIVATE KEY-----\n",
+  "client_email": "mail-merge@copper-seeker-432801-c1.iam.gserviceaccount.com",
+  "client_id": "111546330655128731156",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/mail-merge%40copper-seeker-432801-c1.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
