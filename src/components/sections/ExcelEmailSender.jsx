@@ -133,10 +133,10 @@ const ExcelEmailSender = () => {
 
       try {
         await emailjs.send(
-          "service_brcmulg",
-          "template_ll3pp1b",
+          process.env.NEXT_PUBLIC_SERVICE_ID,
+          process.env.NEXT_PUBLIC_TEMPLATE_ID,
           emailParams,
-          "ZHztMF_0JDYpmnSrs"
+          process.env.NEXT_PUBLIC_USER_ID
         );
         row[6] = "Success";
         await updateSheetStatus(i, "Success");
