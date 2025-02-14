@@ -19,7 +19,7 @@ export async function POST(req) {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.SHEET_ID,
-      range: `Sheet1!G${rowIndex + 2}`, // +2 because sheet is 1-indexed and we have a header row
+      range: `Sheet1!G${rowIndex + 2}`,
       valueInputOption: "RAW",
       requestBody: {
         values: [[status]],
