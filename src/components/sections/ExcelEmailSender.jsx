@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import emailjs from "emailjs-com";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -140,7 +139,7 @@ const ExcelEmailSender = () => {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to send email");
+          throw new Error(response.error);
         }
 
         row[6] = "Success";
