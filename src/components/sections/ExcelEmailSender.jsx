@@ -144,7 +144,10 @@ const ExcelEmailSender = () => {
           body: JSON.stringify(emailParams),
         });
 
+        console.log(response);
+
         if (!response.ok) {
+          console.log("Error Throwing");
           throw new Error(response.statusText);
         }
 
@@ -172,6 +175,7 @@ const ExcelEmailSender = () => {
         data[i][6] = "Fail";
         // Update sheet status
         await updateSheetStatus(i, "Fail");
+        setTimeout(resolve, emailDelay * 1000);
         continue;
       }
     }
