@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Send, Search, Loader2 } from "lucide-react";
-
 const ExcelEmailSender = () => {
   const [data, setData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -110,8 +110,8 @@ const ExcelEmailSender = () => {
     const remainingEmails = data.filter(
       (row, index) => index >= startIndex && (!row[6] || row[6] === "")
     ).length;
-    const initialSeconds = (remainingEmails - 1) * emailDelay;
-    startCountdown(initialSeconds);
+    let remainingTime = remainingEmails * emailDelay;
+    startCountdown(remainingTime);
 
     for (let i = startIndex; i < data.length; i++) {
       if (!sendingRef.current) break;
@@ -133,7 +133,9 @@ const ExcelEmailSender = () => {
   
   Outstanding Enquiry for ${Make} ${Model} ${Reg} Vehicle
   
-  Phone Number ${PhoneNumber} as your phone number`,
+  Phone Number ${PhoneNumber} as your phone number
+  
+  Regards`,
         };
 
         const response = await fetch("/api/sendEmail", {
@@ -144,10 +146,7 @@ const ExcelEmailSender = () => {
           body: JSON.stringify(emailParams),
         });
 
-        console.log(response);
-
         if (!response.ok) {
-          console.log("Error Throwing");
           throw new Error(response.statusText);
         }
 
@@ -163,20 +162,21 @@ const ExcelEmailSender = () => {
         const currentProgress = (processedCount / totalEmails) * 100;
         setProgress(currentProgress);
         setPendingRecords(totalEmails - processedCount);
-
-        if (i < data.length - 1 && sendingRef.current) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, emailDelay * 1000)
-          );
-        }
       } catch (error) {
         console.error("Error sending email:", error);
         // Update status in data array
         data[i][6] = "Fail";
         // Update sheet status
         await updateSheetStatus(i, "Fail");
-        setTimeout(resolve, emailDelay * 1000);
-        continue;
+      }
+
+      // Recalculate remaining time after each email (success or fail)
+      remainingTime -= emailDelay;
+      setRemainingSeconds(remainingTime);
+
+      // Wait for the delay before processing the next email
+      if (i < data.length - 1 && sendingRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, emailDelay * 1000));
       }
     }
 
@@ -188,7 +188,6 @@ const ExcelEmailSender = () => {
   };
 
   const updateSheetStatus = async (rowIndex, status) => {
-    console.log(rowIndex, status);
     try {
       await fetch("/api/updateSheetStatus", {
         method: "POST",
@@ -207,7 +206,6 @@ const ExcelEmailSender = () => {
     setIsSending(false);
     if (timerRef.current) clearInterval(timerRef.current);
   };
-
   return (
     <div className="container mx-auto p-6 space-y-8">
       <Card>
