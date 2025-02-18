@@ -122,22 +122,27 @@ const ExcelEmailSender = () => {
       const emailParams = {
         to_email: EmailAddress,
         from_email: "abdullah35.sajid@gmail.com",
-        subject: "15082024",
+        subject: "New Enquiries: 15082024",
         message: `Hi ${Contact},
-
-        Outstanding Enquiry for ${Make} ${Model} ${Reg} Vehicle
-
-        Phone Number ${PhoneNumber} as your phone number
-        `,
+    
+    Outstanding Enquiry for ${Make} ${Model} ${Reg} Vehicle
+    
+    Phone Number ${PhoneNumber} as your phone number`,
       };
 
       try {
-        await emailjs.send(
-          process.env.NEXT_PUBLIC_SERVICE_ID,
-          process.env.NEXT_PUBLIC_TEMPLATE_ID,
-          emailParams,
-          process.env.NEXT_PUBLIC_USER_ID
-        );
+        const response = await fetch("/api/sendEmail", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(emailParams),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to send email");
+        }
+
         row[6] = "Success";
         await updateSheetStatus(i, "Success");
       } catch (error) {
@@ -155,7 +160,6 @@ const ExcelEmailSender = () => {
         await new Promise((resolve) => setTimeout(resolve, emailDelay * 1000));
       }
     }
-
     setIsSending(false);
     sendingRef.current = false;
     setIsModalOpen(false);
