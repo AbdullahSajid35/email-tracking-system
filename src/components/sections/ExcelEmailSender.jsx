@@ -107,29 +107,35 @@ const ExcelEmailSender = () => {
     setProgress(initialProgress);
 
     const startIndex = lastProcessedIndex === -1 ? 0 : lastProcessedIndex + 1;
-    const remainingEmails = data.length - startIndex;
-    const initialSeconds = (remainingEmails - 1) * emailDelay; // -1 because first email has no delay
+    const remainingEmails = data.filter(
+      (row, index) => index >= startIndex && (!row[6] || row[6] === "")
+    ).length;
+    const initialSeconds = (remainingEmails - 1) * emailDelay;
     startCountdown(initialSeconds);
 
     for (let i = startIndex; i < data.length; i++) {
       if (!sendingRef.current) break;
       const row = data[i];
-      if (row[6] && row[6] !== "") continue;
+
+      // Skip if already processed
+      if (row[6] && row[6] !== "") {
+        continue;
+      }
 
       const [Contact, PhoneNumber, EmailAddress, Make, Model, Reg] = row;
 
-      const emailParams = {
-        to_email: EmailAddress,
-        from_email: "abdullah35.sajid@gmail.com",
-        subject: "New Enquiries: 15082024",
-        message: `Hi ${Contact},
-    
-    Outstanding Enquiry for ${Make} ${Model} ${Reg} Vehicle
-    
-    Phone Number ${PhoneNumber} as your phone number`,
-      };
-
       try {
+        const emailParams = {
+          to_email: EmailAddress,
+          from_email: "abdullah35.sajid@gmail.com",
+          subject: "New Enquiries: 15082024",
+          message: `Hi ${Contact},
+  
+  Outstanding Enquiry for ${Make} ${Model} ${Reg} Vehicle
+  
+  Phone Number ${PhoneNumber} as your phone number`,
+        };
+
         const response = await fetch("/api/sendEmail", {
           method: "POST",
           headers: {
@@ -139,34 +145,46 @@ const ExcelEmailSender = () => {
         });
 
         if (!response.ok) {
-          throw new Error(response.error);
+          throw new Error(response.statusText);
         }
 
-        row[6] = "Success";
+        // Update status in data array
+        data[i][6] = "Success";
+        // Update sheet status
         await updateSheetStatus(i, "Success");
+
+        setLastProcessedIndex(i);
+        const processedCount = data.filter(
+          (row) => row[6] && row[6] !== ""
+        ).length;
+        const currentProgress = (processedCount / totalEmails) * 100;
+        setProgress(currentProgress);
+        setPendingRecords(totalEmails - processedCount);
+
+        if (i < data.length - 1 && sendingRef.current) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, emailDelay * 1000)
+          );
+        }
       } catch (error) {
         console.error("Error sending email:", error);
-        row[6] = "Fail";
+        // Update status in data array
+        data[i][6] = "Fail";
+        // Update sheet status
         await updateSheetStatus(i, "Fail");
-      }
-
-      setLastProcessedIndex(i);
-      const currentProgress = ((i + 1) / totalEmails) * 100;
-      setProgress(currentProgress);
-      setPendingRecords(totalEmails - (i + 1));
-
-      if (i < data.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, emailDelay * 1000));
+        continue;
       }
     }
+
     setIsSending(false);
     sendingRef.current = false;
     setIsModalOpen(false);
     if (timerRef.current) clearInterval(timerRef.current);
-    fetchData();
+    await fetchData(); // Refresh data after completion
   };
 
   const updateSheetStatus = async (rowIndex, status) => {
+    console.log(rowIndex, status);
     try {
       await fetch("/api/updateSheetStatus", {
         method: "POST",
