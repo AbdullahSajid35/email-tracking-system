@@ -17,6 +17,7 @@
     "emailjs-com": "^3.2.0",
     "googleapis": "^144.0.0",
     "lucide-react": "^0.475.0",
+    "mongoose": "^8.12.1",
     "next": "15.1.7",
     "nodemailer": "^6.10.0",
     "react": "^19.0.0",
