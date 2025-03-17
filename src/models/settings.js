@@ -8,7 +8,7 @@ const SettingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
+//Setting
 const Setting =
   mongoose.models.Setting || mongoose.model("Setting", SettingSchema);
 export default Setting;
