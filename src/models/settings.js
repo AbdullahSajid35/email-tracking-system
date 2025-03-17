@@ -4,11 +4,14 @@ const SettingSchema = new mongoose.Schema(
   {
     isRunning: { type: Boolean, default: false },
     acknowledged: { type: Boolean, default: false },
-    lastRun: { type: Date, default: Date.now },
+    startedAt: { type: Date, default: Date.now },
+    delayTime: { type: Number, default: 120 },
+    currentUser: { type: String, default: "" }, // Store the session ID of the current user
   },
   { timestamps: true }
 );
-//Setting
+
+// Setting
 const Setting =
   mongoose.models.Setting || mongoose.model("Setting", SettingSchema);
 export default Setting;
