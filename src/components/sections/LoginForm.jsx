@@ -16,10 +16,10 @@ export default function LoginForm() {
     try {
       setLoading(true);
       const response = await axios.post("/api/login", { email, password });
-      const { role } = response.data;
 
       // Store the role in localStorage or in a state management solution
-      localStorage.setItem("userRole", role);
+      localStorage.setItem("userRole", response.data.role);
+      localStorage.setItem("userName", response.data.name);
 
       toast.success("Logged in successfully");
 

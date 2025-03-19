@@ -27,6 +27,8 @@ export default function Navbar() {
       });
 
       if (response.ok) {
+        localStorage.removeItem("userRole");
+        localStorage.removeItem("userName");
         router.push("/login");
       } else {
         console.error("Logout failed");

@@ -26,6 +26,18 @@ import { Send, Search, Loader2, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const ExcelEmailSender = () => {
+  // Debug function to log timing information
+  const logTimingInfo = (message, startTime) => {
+    const now = Date.now();
+    const elapsed = now - startTime;
+    console.log(
+      `${message} - Time: ${new Date(now).toLocaleTimeString()}, Elapsed: ${
+        elapsed / 1000
+      }s`
+    );
+    return now;
+  };
+
   const [data, setData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -44,21 +56,50 @@ const ExcelEmailSender = () => {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
   const [canTakeOver, setCanTakeOver] = useState(false);
-  const takingOverIntervalRef = useRef(null);
+  const [runningUser, setRunningUser] = useState(null);
 
   const sendingRef = useRef(false);
   const timerRef = useRef(null);
   const statusCheckIntervalRef = useRef(null);
+  const acknowledgeCheckIntervalRef = useRef(null);
+  const dataRefreshIntervalRef = useRef(null);
+  const takingOverIntervalRef = useRef(null);
+  const currentDataRef = useRef([]); // Reference to always have the latest data
 
   // Generate a unique session ID for this browser session
   useEffect(() => {
     if (!sessionId) {
       setSessionId(
-        `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+        `${localStorage.getItem("userName") || "user"}_${Date.now()}`
       );
     }
   }, [sessionId]);
 
+  // Handle page unload to update system status
+  useEffect(() => {
+    // Ensure useEffect runs only when sessionId matches runningUser
+    if (sessionId !== runningUser) return;
+
+    function handleBeforeUnload() {
+      // Create the data to send
+      const data = JSON.stringify({
+        acknowledged: false,
+        isRunning: false,
+        currentUser: "",
+      });
+
+      // Use sendBeacon for reliability during page unload
+      navigator.sendBeacon("/api/updateSettings", data);
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [sessionId, runningUser]);
+
+  // Initial setup and cleanup
   useEffect(() => {
     fetchData();
     checkSystemStatus();
@@ -72,6 +113,10 @@ const ExcelEmailSender = () => {
         clearInterval(statusCheckIntervalRef.current);
       if (takingOverIntervalRef.current)
         clearInterval(takingOverIntervalRef.current);
+      if (acknowledgeCheckIntervalRef.current)
+        clearInterval(acknowledgeCheckIntervalRef.current);
+      if (dataRefreshIntervalRef.current)
+        clearInterval(dataRefreshIntervalRef.current);
     };
   }, []);
 
@@ -92,6 +137,7 @@ const ExcelEmailSender = () => {
 
       if (result.success && result.data.length > 0) {
         const settings = result.data[0];
+        setRunningUser(settings.currentUser);
         setSystemStatus(settings);
 
         // If we're the active sender and someone has acknowledged, stop sending automatically
@@ -102,7 +148,6 @@ const ExcelEmailSender = () => {
           sendingRef.current
         ) {
           handleStop();
-          // No alert/confirmation needed - just stop
         }
       } else {
         // If no settings exist, create initial settings
@@ -116,7 +161,6 @@ const ExcelEmailSender = () => {
       }
     } catch (error) {
       console.error("Error checking system status:", error);
-      // Show error in UI
       setSystemError("Failed to check system status. Please refresh the page.");
     } finally {
       setIsLoading(false);
@@ -148,19 +192,48 @@ const ExcelEmailSender = () => {
     }, 1000);
   };
 
-  const fetchData = async () => {
-    setIsLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const response = await fetch("/api/getSheetData");
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch data: ${response.status} ${response.statusText}`
+        );
+      }
+
       const result = await response.json();
+
+      // Update the ref first to ensure we always have the latest data
+      currentDataRef.current = result;
+
+      // Then update the state
       setData(result);
+
+      // Calculate pending records correctly
       const pending = result.filter((row) => !row[6] || row[6] === "").length;
       setPendingRecords(pending);
       setTotalRecords(result.length);
+
+      // Recalculate progress if we're sending
+      if (sendingRef.current) {
+        const processedCount = result.filter(
+          (row) => row[6] && row[6] !== ""
+        ).length;
+        const currentProgress = (processedCount / result.length) * 100;
+        setProgress(currentProgress);
+      }
+
+      return result; // Return the data for immediate use
     } catch (error) {
       console.error("Error fetching data:", error);
+      if (!silent) {
+        setSystemError("Failed to fetch data. Please try again.");
+      }
+      return null;
+    } finally {
+      if (!silent) setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const filteredData = data.filter((row) =>
@@ -170,6 +243,15 @@ const ExcelEmailSender = () => {
   );
 
   const handleStart = async () => {
+    // First, fetch the latest data to ensure we're working with up-to-date information
+    try {
+      await fetchData();
+    } catch (error) {
+      console.error("Error refreshing data before starting:", error);
+      alert("Failed to refresh data. Please try again.");
+      return;
+    }
+
     // Check if someone else is already sending emails
     await checkSystemStatus();
 
@@ -222,6 +304,7 @@ const ExcelEmailSender = () => {
 
           if (result.success && result.data.length > 0) {
             const settings = result.data[0];
+            setRunningUser(settings.currentUser);
 
             // If the system is no longer running, we can take over
             if (!settings.isRunning) {
@@ -243,6 +326,7 @@ const ExcelEmailSender = () => {
             const result = await statusResponse.json();
             if (result.success && result.data.length > 0) {
               const settings = result.data[0];
+              setRunningUser(settings.currentUser);
               if (!settings.isRunning) {
                 clearInterval(takingOverIntervalRef.current);
                 setTakingOver(false);
@@ -298,169 +382,26 @@ const ExcelEmailSender = () => {
     }
   };
 
-  // Modify the sendEmails function to close the modal after starting
-  const sendEmails = async () => {
-    // Set system status to running
-    if (emailDelay == "") {
-      alert("Plase enter delay time");
-      return;
-    }
-
-    const statusUpdated = await updateSystemStatus(true);
-    if (!statusUpdated) {
-      alert("Failed to update system status. Please try again.");
-      return;
-    }
-
-    // Close the modal immediately after starting
-    setIsModalOpen(false);
-
-    setIsSending(true);
-    sendingRef.current = true;
-
-    const processedEmails = data.filter(
-      (row) => row[6] && row[6] !== ""
-    ).length;
-    const totalEmails = data.length;
-    const initialProgress = (processedEmails / totalEmails) * 100;
-    setProgress(initialProgress);
-
-    const startIndex = lastProcessedIndex === -1 ? 0 : lastProcessedIndex + 1;
-    const remainingEmails = data.filter(
-      (row, index) => index >= startIndex && (!row[6] || row[6] === "")
-    ).length;
-    let remainingTime = remainingEmails * emailDelay;
-    startCountdown(remainingTime);
-
-    // Set up a separate interval to check for acknowledgment every minute
-    const acknowledgeCheckInterval = setInterval(async () => {
-      try {
-        const response = await fetch("/api/settings");
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success && result.data.length > 0) {
-            const settings = result.data[0];
-            if (settings.acknowledged && settings.currentUser === sessionId) {
-              // No alert/confirmation needed - just stop after current email
-              sendingRef.current = false;
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error checking for acknowledgment:", error);
-      }
-    }, 60000); // Check every minute
-
-    for (let i = startIndex; i < data.length; i++) {
-      // Check if we should stop due to acknowledgment
-      try {
-        await checkSystemStatus();
-      } catch (error) {
-        console.error("Error checking status during sending:", error);
-        // Continue anyway, we'll use the last known status
-      }
-
-      if (!sendingRef.current || (systemStatus && systemStatus.acknowledged)) {
-        break;
-      }
-
-      const row = data[i];
-
-      // Skip if already processed
-      if (row[6] && row[6] !== "") {
-        continue;
-      }
-
-      const [Contact, PhoneNumber, EmailAddress, Make, Model, Reg] = row;
-
-      try {
-        const emailParams = {
-          to_email: EmailAddress,
-          from_email: "abdullah35.sajid@gmail.com",
-          subject: "New Enquiries: 15082024",
-          message: `Hi ${Contact},
-
-Outstanding Enquiry for ${Make} ${Model} ${Reg} Vehicle
-
-Phone Number ${PhoneNumber} as your phone number
-
-Regards`,
-        };
-
-        const response = await fetch("/api/sendEmail", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(emailParams),
-        });
-
-        if (!response.ok) {
-          throw new Error(response.statusText);
-        }
-
-        // Update status in data array
-        data[i][6] = "Success";
-        // Update sheet status
-        await updateSheetStatus(i, "Success");
-
-        setLastProcessedIndex(i);
-        const processedCount = data.filter(
-          (row) => row[6] && row[6] !== ""
-        ).length;
-        const currentProgress = (processedCount / totalEmails) * 100;
-        setProgress(currentProgress);
-        setPendingRecords(totalEmails - processedCount);
-      } catch (error) {
-        console.error("Error sending email:", error);
-        // Update status in data array
-        data[i][6] = "Fail";
-        // Update sheet status
-        try {
-          await updateSheetStatus(i, "Fail");
-        } catch (sheetError) {
-          console.error("Error updating sheet status:", sheetError);
-        }
-      }
-
-      // Recalculate remaining time after each email (success or fail)
-      remainingTime -= emailDelay;
-      setRemainingSeconds(remainingTime);
-
-      // Wait for the delay before processing the next email
-      if (i < data.length - 1 && sendingRef.current) {
-        await new Promise((resolve) => setTimeout(resolve, emailDelay * 1000));
-      }
-    }
-
-    // Clear the acknowledgment check interval
-    clearInterval(acknowledgeCheckInterval);
-
-    // Update system status to not running
-    try {
-      await updateSystemStatus(false);
-    } catch (error) {
-      console.error("Error updating system status after completion:", error);
-    }
-
-    setIsSending(false);
-    sendingRef.current = false;
-    setIsModalOpen(false);
-    if (timerRef.current) clearInterval(timerRef.current);
-    await fetchData(); // Refresh data after completion
-  };
-
   const updateSheetStatus = async (rowIndex, status) => {
     try {
-      await fetch("/api/updateSheetStatus", {
+      const response = await fetch("/api/updateSheetStatus", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ rowIndex, status }),
       });
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to update sheet status: ${response.status} ${response.statusText}`
+        );
+      }
+
+      return true;
     } catch (error) {
       console.error("Error updating sheet status:", error);
+      return false;
     }
   };
 
@@ -468,6 +409,10 @@ Regards`,
     sendingRef.current = false;
     setIsSending(false);
     if (timerRef.current) clearInterval(timerRef.current);
+    if (acknowledgeCheckIntervalRef.current)
+      clearInterval(acknowledgeCheckIntervalRef.current);
+    if (dataRefreshIntervalRef.current)
+      clearInterval(dataRefreshIntervalRef.current);
 
     // Update system status to not running
     await updateSystemStatus(false);
@@ -487,6 +432,315 @@ Regards`,
     setIsModalOpen(true);
   };
 
+  // Improved sendEmails function to fix duplicate sending and progress issues
+  const sendEmails = async () => {
+    // Validate delay time
+    if (emailDelay === "") {
+      alert("Please enter delay time");
+      return;
+    }
+
+    // Set system status to running first
+    const statusUpdated = await updateSystemStatus(true);
+    if (!statusUpdated) {
+      alert("Failed to update system status. Please try again.");
+      return;
+    }
+
+    // Close the modal immediately after starting
+    setIsModalOpen(false);
+
+    // CRITICAL: Fetch the latest data AFTER updating system status
+    const freshData = await fetchData();
+    if (!freshData) {
+      alert("Failed to refresh data. Please try again.");
+      await updateSystemStatus(false); // Revert system status if we can't fetch data
+      return;
+    }
+
+    // Calculate initial progress and pending records
+    const processedEmails = freshData.filter(
+      (row) => row[6] && row[6] !== ""
+    ).length;
+    const totalEmails = freshData.length;
+    const initialProgress = (processedEmails / totalEmails) * 100;
+    setProgress(initialProgress);
+    setPendingRecords(totalEmails - processedEmails);
+
+    // Find the first unprocessed record
+    let startIndex = -1;
+    for (let i = 0; i < freshData.length; i++) {
+      if (!freshData[i][6] || freshData[i][6] === "") {
+        startIndex = i;
+        break;
+      }
+    }
+
+    // If all records are processed, notify and exit
+    if (startIndex === -1) {
+      alert("All records have been processed. Refreshing data.");
+      await updateSystemStatus(false);
+      return;
+    }
+
+    setLastProcessedIndex(startIndex - 1);
+
+    // Calculate remaining emails and time more accurately
+    const pendingEmails = freshData.filter(
+      (row, index) => index >= startIndex && (!row[6] || row[6] === "")
+    ).length;
+
+    const remainingTime = pendingEmails * emailDelay;
+    startCountdown(remainingTime);
+
+    setIsSending(true);
+    sendingRef.current = true;
+
+    // Set up a regular interval to refresh data during sending
+    dataRefreshIntervalRef.current = setInterval(async () => {
+      if (sendingRef.current) {
+        await fetchData(true);
+      }
+    }, 3000); // Refresh every 3 seconds
+
+    // Set up interval to check for acknowledgment
+    if (acknowledgeCheckIntervalRef.current)
+      clearInterval(acknowledgeCheckIntervalRef.current);
+
+    acknowledgeCheckIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await fetch("/api/settings");
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data.length > 0) {
+            const settings = result.data[0];
+            setRunningUser(settings.currentUser);
+            if (settings.acknowledged && settings.currentUser === sessionId) {
+              // Stop after current email
+              sendingRef.current = false;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error checking for acknowledgment:", error);
+      }
+    }, 60000); // Check every minute
+
+    // Process emails one by one with precise cumulative timing
+    try {
+      // Get fresh data right before starting the loop
+      const latestData = await fetchData(true);
+      if (!latestData) {
+        throw new Error(
+          "Failed to fetch latest data before starting email process"
+        );
+      }
+
+      // Track the start time for cumulative timing
+      const processStartTime = Date.now();
+
+      // Log the start time for debugging
+      console.log(
+        `Process started at: ${new Date(processStartTime).toLocaleTimeString()}`
+      );
+
+      for (let i = startIndex; i < latestData.length; i++) {
+        // Check if we should stop
+        if (!sendingRef.current) {
+          console.log("Stopping email sending process");
+          break;
+        }
+
+        try {
+          await checkSystemStatus();
+        } catch (error) {
+          console.error("Error checking status during sending:", error);
+        }
+
+        if (systemStatus && systemStatus.acknowledged) {
+          console.log("Stopping due to acknowledgment");
+          break;
+        }
+
+        // Calculate the exact time this email should be sent (based on its position)
+        const emailIndex = i - startIndex;
+        const exactSendTime = processStartTime + emailIndex * emailDelay * 1000;
+
+        // Log the scheduled time for this email
+        console.log(
+          `Email ${emailIndex + 1} scheduled for: ${new Date(
+            exactSendTime
+          ).toLocaleTimeString()}`
+        );
+
+        // Get the latest data for this row
+        const freshDataForRow = await fetchData(true);
+        if (!freshDataForRow) {
+          console.error("Failed to fetch fresh data for row", i);
+          continue; // Skip this row if we can't get fresh data
+        }
+
+        const row = freshDataForRow[i];
+
+        // CRITICAL: Double-check if already processed using the latest data
+        if (row[6] && row[6] !== "") {
+          console.log(
+            `Skipping row ${i} as it's already processed with status: ${row[6]}`
+          );
+          continue;
+        }
+
+        const [Contact, PhoneNumber, EmailAddress, Make, Model, Reg] = row;
+
+        try {
+          // First update the sheet status to "Processing" to prevent duplicates
+          console.log(`Setting row ${i} to Processing status`);
+          const updateResult = await updateSheetStatus(i, "Processing");
+          if (!updateResult) {
+            throw new Error("Failed to update sheet status to Processing");
+          }
+
+          // Refresh data to ensure UI is in sync with sheet
+          await fetchData(true);
+
+          console.log(`Sending email to ${EmailAddress} for ${Make} ${Model}`);
+          const emailParams = {
+            to_email: EmailAddress,
+            from_email: "abdullah35.sajid@gmail.com",
+            subject: "New Enquiries: 15082024",
+            message: `Hi ${Contact},
+
+Outstanding Enquiry for ${Make} ${Model} ${Reg} Vehicle
+
+Phone Number ${PhoneNumber} as your phone number
+
+Regards`,
+          };
+
+          const response = await fetch("/api/sendEmail", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(emailParams),
+          });
+
+          if (!response.ok) {
+            throw new Error(response.statusText);
+          }
+
+          // Update sheet status to Success
+          console.log(`Setting row ${i} to Success status`);
+          await updateSheetStatus(i, "Success");
+
+          // Refresh data to ensure UI is in sync with sheet
+          const updatedData = await fetchData(true);
+
+          setLastProcessedIndex(i);
+
+          // Recalculate progress and pending records
+          if (updatedData) {
+            const processedCount = updatedData.filter(
+              (row) => row[6] && row[6] !== ""
+            ).length;
+            const currentProgress = (processedCount / updatedData.length) * 100;
+            setProgress(currentProgress);
+            setPendingRecords(updatedData.length - processedCount);
+
+            // Update remaining time based on actual pending records
+            const remainingRows = updatedData.filter(
+              (row, idx) => idx > i && (!row[6] || row[6] === "")
+            ).length;
+            setRemainingSeconds(remainingRows * emailDelay);
+          }
+        } catch (error) {
+          console.error(`Error sending email for row ${i}:`, error);
+
+          // Update sheet status to Fail
+          try {
+            console.log(`Setting row ${i} to Fail status`);
+            await updateSheetStatus(i, "Fail");
+
+            // Refresh data to ensure UI is in sync with sheet
+            const updatedData = await fetchData(true);
+
+            // Recalculate progress based on freshly fetched data
+            if (updatedData) {
+              const processedCount = updatedData.filter(
+                (row) => row[6] && row[6] !== ""
+              ).length;
+              const currentProgress =
+                (processedCount / updatedData.length) * 100;
+              setProgress(currentProgress);
+              setPendingRecords(updatedData.length - processedCount);
+            }
+          } catch (sheetError) {
+            console.error("Error updating sheet status:", sheetError);
+          }
+        }
+
+        // Now check if we need to wait before the next email to maintain the exact timing
+        if (i < latestData.length - 1 && sendingRef.current) {
+          const now = Date.now();
+          const nextEmailIndex = emailIndex + 1;
+          const nextEmailTime =
+            processStartTime + nextEmailIndex * emailDelay * 1000;
+          const waitTime = Math.max(0, nextEmailTime - now);
+
+          console.log(
+            `Email ${
+              emailIndex + 1
+            } completed at: ${new Date().toLocaleTimeString()}`
+          );
+          console.log(
+            `Next email (${nextEmailIndex + 1}) scheduled for: ${new Date(
+              nextEmailTime
+            ).toLocaleTimeString()}`
+          );
+          console.log(
+            `Waiting ${Math.round(
+              waitTime / 1000
+            )} seconds to maintain exact timing`
+          );
+
+          if (waitTime > 0) {
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
+          } else {
+            console.log(
+              `Processing took longer than delay time, sending next email immediately`
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error in email sending process:", error);
+      setSystemError("An error occurred during the email sending process.");
+    } finally {
+      // Clean up regardless of how the loop exits
+      if (acknowledgeCheckIntervalRef.current)
+        clearInterval(acknowledgeCheckIntervalRef.current);
+      if (dataRefreshIntervalRef.current)
+        clearInterval(dataRefreshIntervalRef.current);
+
+      // Update system status to not running
+      try {
+        await updateSystemStatus(false);
+      } catch (error) {
+        console.error("Error updating system status after completion:", error);
+      }
+
+      setIsSending(false);
+      sendingRef.current = false;
+      setIsModalOpen(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+
+      // Final data refresh
+      await fetchData();
+
+      console.log("Email sending process completed");
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-8">
       <Card>
@@ -494,26 +748,6 @@ Regards`,
           <CardTitle className="text-3xl text-center font-bold">
             Hilton Car SuperMarket
           </CardTitle>
-          {systemError && (
-            <Alert className="mb-4" variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                {systemError}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="ml-2"
-                  onClick={() => {
-                    setSystemError(null);
-                    checkSystemStatus();
-                  }}
-                >
-                  Retry
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
         </CardHeader>
         <CardContent>
           {systemError && (
@@ -572,42 +806,59 @@ Regards`,
               {systemStatus?.isRunning &&
                 systemStatus?.currentUser !== sessionId && (
                   <p className="text-lg text-amber-600">
-                    <span className="font-semibold">System is busy</span> -
-                    Started{" "}
+                    <span className="font-semibold">
+                      Email Sending Process is Running by{" "}
+                      {runningUser.split("_")[0]}
+                    </span>{" "}
+                    - Started{" "}
                     {new Date(systemStatus.startedAt).toLocaleTimeString()}
                   </p>
                 )}
             </div>
-            {isCurrentUserSending ? (
+            <div className="flex flex-col gap-2">
+              {isCurrentUserSending ? (
+                <Button
+                  onClick={handleStop}
+                  size="lg"
+                  variant="destructive"
+                  className="hover:bg-destructive/90"
+                  disabled={isUpdatingStatus}
+                >
+                  {isUpdatingStatus ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Stop Sending Emails
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleStart}
+                  size="lg"
+                  className="bg-primary hover:bg-primary/90"
+                  disabled={isLoading || isUpdatingStatus || takingOver}
+                >
+                  {isLoading || isUpdatingStatus ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-5 w-5" />
+                  )}
+                  {isSomeoneElseSending
+                    ? "Request to Send Emails"
+                    : "Start Sending Emails"}
+                </Button>
+              )}
               <Button
-                onClick={handleStop}
-                size="lg"
-                variant="destructive"
-                className="hover:bg-destructive/90"
-                disabled={isUpdatingStatus}
+                onClick={fetchData}
+                size="sm"
+                variant="outline"
+                className="px-4"
+                disabled={isLoading}
               >
-                {isUpdatingStatus ? (
+                {isLoading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                Stop Sending Emails
+                Refresh Data
               </Button>
-            ) : (
-              <Button
-                onClick={handleStart}
-                size="lg"
-                className="bg-primary hover:bg-primary/90"
-                disabled={isLoading || isUpdatingStatus || takingOver}
-              >
-                {isLoading || isUpdatingStatus ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-5 w-5" />
-                )}
-                {isSomeoneElseSending
-                  ? "Request to Send Emails"
-                  : "Start Sending Emails"}
-              </Button>
-            )}
+            </div>
           </div>
 
           {/* Always show progress information in the main UI when sending */}
@@ -635,7 +886,6 @@ Regards`,
         </CardContent>
       </Card>
 
-      {/* Remove the non-dismissible behavior from the Dialog component */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -681,7 +931,9 @@ Regards`,
       <Dialog open={isAcknowledging} onOpenChange={setIsAcknowledging}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>System Busy</DialogTitle>
+            <DialogTitle>
+              Process is running by {runningUser.split("_")[0]}
+            </DialogTitle>
             <DialogDescription>
               Another user is currently sending emails. Would you like to
               request to take over?
@@ -708,7 +960,6 @@ Regards`,
         </DialogContent>
       </Dialog>
 
-      {/* Make the takeover dialog non-cancelable by setting onOpenChange to a function that does nothing */}
       <Dialog
         open={takingOver}
         onOpenChange={() => {}}
@@ -736,7 +987,6 @@ Regards`,
               long delay between emails.
             </p>
           </div>
-          {/* Removed the Cancel Request button */}
         </DialogContent>
       </Dialog>
 
@@ -811,6 +1061,8 @@ Regards`,
                               ? "success"
                               : row[6] === "Fail"
                               ? "destructive"
+                              : row[6] === "Processing"
+                              ? "secondary"
                               : "default"
                           }
                         >
