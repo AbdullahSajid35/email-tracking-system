@@ -808,7 +808,7 @@ Regards`,
                   <p className="text-lg text-amber-600">
                     <span className="font-semibold">
                       Email Sending Process is Running by{" "}
-                      {runningUser.split("_")[0]}
+                      {runningUser ? runningUser.split("_")[0] : "-"}
                     </span>{" "}
                     - Started{" "}
                     {new Date(systemStatus.startedAt).toLocaleTimeString()}
@@ -932,7 +932,8 @@ Regards`,
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>
-              Process is running by {runningUser.split("_")[0]}
+              Process is running by{" "}
+              {runningUser ? runningUser.split("_")[0] : "-"}
             </DialogTitle>
             <DialogDescription>
               Another user is currently sending emails. Would you like to
