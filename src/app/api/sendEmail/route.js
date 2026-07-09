@@ -3,21 +3,20 @@ import nodemailer from "nodemailer";
 export async function POST(req) {
   try {
     const body = await req.json(); // Parse request body
-    const { to_email, from_email, subject, message } = body;
+    const { to_email, subject, message } = body;
 
-    // Create a transporter object using SMTP
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
+      host: "smtp.emailpnl.com",
+      port: 465,
+      secure: true,
       auth: {
-        user: process.env.SENDER_EMAIL,
-        pass: process.env.SENDER_PASSWORD,
+        user: process.env.HILTON_EMAIL,
+        pass: process.env.HILTON_PASSWORD,
       },
     });
 
     const mailOptions = {
-      from: from_email,
+      from: process.env.HILTON_EMAIL,
       to: to_email,
       subject: subject,
       text: message,

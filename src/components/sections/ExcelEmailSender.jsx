@@ -127,7 +127,6 @@ const ExcelEmailSender = () => {
       try {
         const emailParams = {
           to_email: EmailAddress,
-          from_email: "abdullah35.sajid@gmail.com",
           subject: "New Enquiries: 15082024",
           message: `Hi ${Contact},
   
